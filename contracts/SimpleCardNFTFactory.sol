@@ -29,8 +29,8 @@ contract SimpleCardNFTFactory is ERC721 {
     mapping(address => uint[]) private _tokenIdsMadeByIssuer;  //issuer가 발급한 명함의 tokenId들
     mapping(address => mapping(uint=> bool)) private _isTokenStillOwnedByIssuer; //issuer가 발급한 tokenId들이 현재 issuer에게 있는지. 있으면 true, 없으면 false
     mapping(uint => address) private _issuerOfToken; //tokenId의 issuer
-    mapping(address => uint) private _amountOfTokenOwnedByIssuer; //issuer가 현재 가지고 있는 자신의 명함 개수(발급한 양 - 남들에게 transfer한 양)
-    
+    mapping(address => uint) private _amountOfTokenOwnedByIssuer; //issuer가 현재 가지고 있는 자신의 명함 개수(발급한 양 - 남들에게 transfer한 양) //ERC721의 _balances는 자신의 명함 개수 뿐만 아니라 자신이 받은 명함 개수까지 value값으로 가진다는 점에서 이 mapping과 차이점을 가짐. 
+
 
     //Events
     event SimpleCardInfoRegistered(
@@ -47,6 +47,13 @@ contract SimpleCardNFTFactory is ERC721 {
     event SimpleCardNFTMinted(
         uint indexed tokenId,
         address issuer,
+        uint amountOfTokenOwnedByIssuer
+    );
+
+    event SimpleCardNFTTransfered(
+        address indexed to,
+        address from,
+        uint tokenId,
         uint amountOfTokenOwnedByIssuer
     );
 
@@ -67,7 +74,8 @@ contract SimpleCardNFTFactory is ERC721 {
 
 
     //Functions
-    function registerSimpleCardInfo (string memory _name, //자신의 명함 NFT 정보 작성
+    function registerSimpleCardInfo (//자신의 명함 NFT 정보 작성
+        string memory _name, 
         string memory _email,
         string memory _company,
         string memory _university,
@@ -127,6 +135,18 @@ contract SimpleCardNFTFactory is ERC721 {
         //tokenIds 관련 매핑 업데이트
         _isTokenStillOwnedByIssuer[msg.sender][_tokenIdToTransfer]= false;
         _amountOfTokenOwnedByIssuer[msg.sender] --;
+
+        emit SimpleCardNFTTransfered(to, msg.sender, _tokenIdToTransfer, _amountOfTokenOwnedByIssuer[msg.sender]);
+    }
+
+
+    //getter 함수
+    function getSimpleCardInfo(address issuer) external view returns (SimpleCardInfo memory){
+        return _infos[issuer];
+    }
+
+    function getAmountOfTokenOwnedByIssuer(address issuer) external view returns (uint){
+        return _amountOfTokenOwnedByIssuer[issuer];
     }
 
 }
