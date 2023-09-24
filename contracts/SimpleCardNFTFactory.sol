@@ -4,17 +4,12 @@ pragma solidity >0.8.0;
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
 //Errors
+error No_Simple_Card_NFTs_To_Transfer();
 
 
 contract SimpleCardNFTFactory is ERC721 {
+    //State Variables
     uint public tokenId; //처음 선언할 때 tokenId=0
-    mapping(address  => SimpleCardInfo ) private _infos; //issuer가 발급한 명함 정보
-    mapping(address => uint[]) private _tokenIdsMadeByIssuer;  //issuer가 발급한 명함의 tokenId들
-    mapping(address => mapping(uint=> bool)) _isTokenStillMine; //issuer가 발급한 tokenId들이 현재 issuer에게 있는지. 있으면 true, 없으면 false
-    mapping(uint => address) private _issuerOfToken; //tokenId의 issuer
-    mapping(address => uint) private _amountOfMySimpleCard; //issuer가 현재 가지고 있는 자신의 명함 개수(발급한 양 - 남들에게 transfer한 양)
-    constructor() ERC721("SimpleCardNFT", "SCard") {}
-    
 
     struct SimpleCardInfo { //내 명함에 들어가는 기본적인 정보들로 구조체(여러 개의 변수를 하나의 단위로 묶어서 관리할 수 있게 해주는 데이터 타입)를 만듦
         //essential
@@ -30,6 +25,48 @@ contract SimpleCardNFTFactory is ERC721 {
         string portfolio;
     }
 
+    mapping(address  => SimpleCardInfo ) private _infos; //issuer가 발급한 명함 정보
+    mapping(address => uint[]) private _tokenIdsMadeByIssuer;  //issuer가 발급한 명함의 tokenId들
+    mapping(address => mapping(uint=> bool)) private _isTokenStillOwnedByIssuer; //issuer가 발급한 tokenId들이 현재 issuer에게 있는지. 있으면 true, 없으면 false
+    mapping(uint => address) private _issuerOfToken; //tokenId의 issuer
+    mapping(address => uint) private _amountOfTokenOwnedByIssuer; //issuer가 현재 가지고 있는 자신의 명함 개수(발급한 양 - 남들에게 transfer한 양)
+    
+
+    //Events
+    event SimpleCardInfoRegistered(
+        address indexed issuer,
+        string name,
+        string email,
+        string company,
+        string university,
+        string major,
+        string phone,
+        string portfolio
+    );
+
+    event SimpleCardNFTMinted(
+        uint indexed tokenId,
+        address issuer,
+        uint amountOfTokenOwnedByIssuer
+    );
+
+
+    //Modifiers
+    modifier isSimpleCardInfoRegistered(){
+        SimpleCardInfo memory mySimpleCardInfo = _infos[msg.sender];
+        require(
+            keccak256(abi.encodePacked(mySimpleCardInfo.name)) != keccak256(abi.encodePacked("")),
+            "Register your Simple Card info First"
+        );
+        _;
+    }
+
+
+    //Constructors
+    constructor() ERC721("SimpleCardNFT", "SCard") {}
+
+
+    //Functions
     function registerSimpleCardInfo (string memory _name, //자신의 명함 NFT 정보 작성
         string memory _email,
         string memory _company,
@@ -48,42 +85,48 @@ contract SimpleCardNFTFactory is ERC721 {
             phone:_phone,
             portfolio:_portfolio
         });
+               
         _infos[msg.sender] = simpleCardInfo;
+
+        emit SimpleCardInfoRegistered(msg.sender, _name, _email, _company, _university, _major, _phone, _portfolio);
     } 
 
-    function mintSimpleCardNFT () public payable{ //자신의 명함 NFT 한 개 발급
-        SimpleCardInfo memory mySimpleCardInfo = _infos[msg.sender];
-        require(
-            keccak256(abi.encodePacked(mySimpleCardInfo.name)) != keccak256(abi.encodePacked("")),
-            "Register your Simple Card info First"
-        );
+    function mintSimpleCardNFT () public payable isSimpleCardInfoRegistered{ //자신의 명함 NFT 한 개 발급      
         tokenId++;
         
         _mint(msg.sender, tokenId);
+
+        //tokenIds 관련 매핑 업데이트
+        uint[] storage tokenIdsMadeByIssuer = _tokenIdsMadeByIssuer[msg.sender];
+        tokenIdsMadeByIssuer.push(tokenId);
+        _isTokenStillOwnedByIssuer[msg.sender][tokenId] = true;
+        _issuerOfToken[tokenId] = msg.sender;      
+        _amountOfTokenOwnedByIssuer[msg.sender]++;
+
+        emit SimpleCardNFTMinted(tokenId,msg.sender, _amountOfTokenOwnedByIssuer[msg.sender]);
     }
 
-    function transferSimpleCardNFT () public {
-        
+    function transferSimpleCardNFT (address to) public isSimpleCardInfoRegistered{
+        require(_amountOfTokenOwnedByIssuer[msg.sender]!=0,"Mint your Simple Card NFT first");
 
+        uint _tokenIdToTransfer;
+        uint[] memory tokenIdsMadeByIssuer =_tokenIdsMadeByIssuer[msg.sender];
+        for (uint i=0;i<tokenIdsMadeByIssuer.length;i++) {
+            uint _tokenIdMadeByIssuer = tokenIdsMadeByIssuer[i];
+            if (_isTokenStillOwnedByIssuer[msg.sender][_tokenIdMadeByIssuer]==true) {
+                _tokenIdToTransfer = _tokenIdMadeByIssuer;
+                break;
+            }
+            if ((i==tokenIdsMadeByIssuer.length-1)&&(_isTokenStillOwnedByIssuer[msg.sender][_tokenIdMadeByIssuer]==false)){
+                revert No_Simple_Card_NFTs_To_Transfer();
+            }
+        }
+
+        safeTransferFrom(msg.sender, to, _tokenIdToTransfer);
+
+        //tokenIds 관련 매핑 업데이트
+        _isTokenStillOwnedByIssuer[msg.sender][_tokenIdToTransfer]= false;
+        _amountOfTokenOwnedByIssuer[msg.sender] --;
     }
 
-
-
-    
-
-
-
-
-    // function createCard(string memory metadataURI) public  returns (uint256) {
-    //     _tokenIds.increment();
-    //     uint256 tokenId = _tokenIds.current();
-
-    //     _mint(msg.sender, tokenId);
-
-    //     return tokenId;
-    // }
-
-    // function updateMetadata(uint256 tokenId, string memory newMetadataURI) public  {
-    //     _setTokenURI(tokenId, newMetadataURI);
-    // }
 }
