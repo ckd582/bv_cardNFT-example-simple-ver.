@@ -10,6 +10,8 @@ error No_Simple_Card_NFTs_To_Transfer();
 contract SimpleCardNFTFactory is ERC721 {
     //State Variables
     uint public tokenId; //처음 선언할 때 tokenId=0
+    uint dnaDigits = 16;
+    uint dnaModulus = 10 ** dnaDigits;
 
     struct SimpleCardInfo { //내 명함에 들어가는 기본적인 정보들로 구조체(여러 개의 변수를 하나의 단위로 묶어서 관리할 수 있게 해주는 데이터 타입)를 만듦
         //essential
@@ -23,7 +25,8 @@ contract SimpleCardNFTFactory is ERC721 {
         string major;
         string phone;
         string portfolio;
-    }
+        uint dna
+    ;
 
     mapping(address  => SimpleCardInfo ) private _infos; //issuer가 발급한 명함 정보
     mapping(address => uint[]) private _tokenIdsMadeByIssuer;  //issuer가 발급한 명함의 tokenId들
@@ -74,6 +77,10 @@ contract SimpleCardNFTFactory is ERC721 {
 
 
     //Functions
+    function _generateRandomDna(string memory _str) private view returns (uint) {
+        uint rand = uint(keccak256(abi.encodePacked(_str)));
+        return rand % dnaModulus;
+    }
     function registerSimpleCardInfo (//자신의 명함 NFT 정보 작성
         string memory _name, 
         string memory _email,
@@ -82,6 +89,11 @@ contract SimpleCardNFTFactory is ERC721 {
         string memory _major,
         string memory _phone,
         string memory _portfolio
+         )
+    
+    public {
+        uint randomDna = _generateRandomDna(_name); // Generate a random DNA based on the name
+
     )public{
         SimpleCardInfo memory simpleCardInfo = SimpleCardInfo({
             name:_name,
@@ -92,7 +104,9 @@ contract SimpleCardNFTFactory is ERC721 {
             major:_major,
             phone:_phone,
             portfolio:_portfolio
+            dna: randomDna  // Assign the generated DNA to the card
         });
+        };
                
         _infos[msg.sender] = simpleCardInfo;
 
